@@ -1,0 +1,22 @@
+{
+  "activityEntities" : [
+
+  ],
+  "createdDate" : "2025-11-18T02:34:32Z",
+  "dataPathRelativeToProjectURL" : "../../../../../../Users/icaros/Downloads/SignLink_CreateML_2025-11-17_21-33-54.csv/",
+  "dataResult" : {
+    "createdDate" : "2025-11-18T02:34:32Z",
+    "dataSourceID" : "DBCC7784-DA1A-44D1-9B62-0DFA727F0D80",
+    "dataURL" : "file:///Users/icaros/Downloads/SignLink_CreateML_2025-11-17_21-33-54.csv"
+  },
+  "dataURL" : "file:///Users/icaros/Downloads/SignLink_CreateML_2025-11-17_21-33-54.csv",
+  "experimentIDs" : [
+    "EA9EC788-D0DF-47EA-8C4F-6AF333211327"
+  ],
+  "id" : "DBCC7784-DA1A-44D1-9B62-0DFA727F0D80",
+  "modifiedDate" : "2025-11-18T02:34:32Z",
+  "pathType" : 0,
+  "preferredFilename" : "SignLink_CreateML_2025-11-17_21-33-54.csv",
+  "title" : "SignLink_CreateML_2025-11-17_21-33-54.csv",
+  "version" : "1.0"
+}

@@ -78,6 +78,7 @@ struct MainTranslatorView: View {
             .configureSheets(showingHistory: $showingHistory,
                              showingStats: $showingStats,
                              showingTutorial: $showingTutorial,
+                             showingSettings: $showingSettings,
                              conversationVM: conversationVM)
             .configureDebugOverlay()
         }
@@ -352,6 +353,7 @@ private extension View {
     func configureSheets(showingHistory:Binding<Bool>,
                          showingStats:Binding<Bool>,
                          showingTutorial:Binding<Bool>,
+                         showingSettings:Binding<Bool>,
                          conversationVM: ConversationViewModel) -> some View {
         self
             .sheet(isPresented: showingHistory) {
@@ -362,6 +364,9 @@ private extension View {
             }
             .sheet(isPresented: showingStats) {
                 DatasetStatsView()
+            }
+            .sheet(isPresented: showingSettings) {
+                SettingsView()
             }
     }
     

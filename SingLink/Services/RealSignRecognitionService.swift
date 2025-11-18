@@ -16,13 +16,13 @@ internal import Combine
  - Realiza predicciones en tiempo real desde hand poses
  - Proporciona confianzas y alternativas de predicción
  */
-@MainActor
 final class RealSignRecognitionService: ObservableObject {
     
     // MARK: - Published Properties
     @Published var isModelLoaded = false
     @Published var currentModelName: String?
     @Published var modelLoadError: String?
+    @Published var supportedSigns: [String] = []
     
     // MARK: - Private Properties
     private var mlModel: MLModel?
@@ -46,7 +46,11 @@ extension RealSignRecognitionService {
             isModelLoaded = true
             modelLoadError = nil
             
+            // Cargar las señas soportadas
+            loadSupportedSigns()
+            
             print("✅ Modelo cargado: \(currentModelName ?? "Desconocido")")
+            print("🏷️ Señas soportadas: \(supportedSigns)")
             
         } catch {
             isModelLoaded = false
@@ -73,10 +77,19 @@ extension RealSignRecognitionService {
     }
     
     private func findCompiledModelInBundle() -> URL? {
-        // Buscar .mlmodelc en el bundle principal
-        if let modelPath = Bundle.main.path(forResource: "HandPoseClassifier", ofType: "mlmodelc") {
+        // Buscar .mlmodelc en el bundle principal con el nombre correcto
+        if let modelPath = Bundle.main.path(forResource: "MLSingLink", ofType: "mlmodelc") {
             return URL(fileURLWithPath: modelPath)
         }
+        
+        // Buscar alternativas
+        let possibleNames = ["MLSingLink", "HandPoseClassifier", "SignLanguageModel"]
+        for name in possibleNames {
+            if let modelPath = Bundle.main.path(forResource: name, ofType: "mlmodelc") {
+                return URL(fileURLWithPath: modelPath)
+            }
+        }
+        
         return nil
     }
     
@@ -90,10 +103,32 @@ extension RealSignRecognitionService {
                 includingPropertiesForKeys: nil
             )
             
+            // Buscar MLSingLink específicamente
+            if let mlSingLink = contents.first(where: { $0.lastPathComponent == "MLSingLink.mlmodelc" }) {
+                return mlSingLink
+            }
+            
+            // O cualquier modelo compilado
             return contents.first { $0.pathExtension == "mlmodelc" }
         } catch {
             return nil
         }
+    }
+    
+    /// Carga las señas soportadas desde la descripción del modelo
+    private func loadSupportedSigns() {
+        guard let model = mlModel else { return }
+        
+        let description = model.modelDescription
+        
+        // Por ahora, usar señas por defecto basadas en dataset común
+        supportedSigns = getDefaultSupportedSigns()
+        
+        print("⚠️ Usando señas por defecto: \(supportedSigns)")
+    }
+    
+    private func getDefaultSupportedSigns() -> [String] {
+        return ["Hola", "Adios", "Gracias", "Por Favor", "Si", "No", "Ayuda", "Comida", "Agua"]
     }
 }
 
@@ -132,42 +167,147 @@ extension RealSignRecognitionService {
     
     /// Prepara el input del modelo desde una hand pose
     private func prepareModelInput(from handPose: HandPose) throws -> MLFeatureProvider {
-        guard let multiArray = MLPreprocessor.convertHandPoseToMLMultiArray(handPose) else {
-            throw PredictionError.inputPreparationFailed
+        // Convertir hand pose a array de características
+        let featureArray = convertHandPoseToFeatureArray(handPose)
+        
+        // Crear MLMultiArray con las características
+        let multiArray = try MLMultiArray(shape: [NSNumber(value: featureArray.count)], dataType: .double)
+        
+        for (index, value) in featureArray.enumerated() {
+            multiArray[index] = NSNumber(value: value)
         }
         
-        // El input esperado depende de cómo nombre tu modelo las features
-        let input = HandPoseClassifierInput(poses: multiArray)
-        return input
+        // Crear input - usar el nombre correcto basado en debug
+        let featureValue = MLFeatureValue(multiArray: multiArray)
+        let inputName = determineInputName()
+        
+        print("🔍 Usando input name: \(inputName)")
+        
+        let featureProvider = try MLDictionaryFeatureProvider(dictionary: [
+            inputName: featureValue
+        ])
+        
+        return featureProvider
     }
     
-    /// Procesa el resultado de la predicción del modelo
-    private func processPredictionResult(_ prediction: MLFeatureProvider, for handPose: HandPose) -> SignPrediction? {
-        // Extraer la predicción principal
-        guard let labelFeature = prediction.featureValue(for: "label"),
-              let sign = labelFeature.stringValue else {
-            return nil
+    /// Determina el nombre correcto del input basado en la descripción del modelo
+    private func determineInputName() -> String {
+        guard let model = mlModel else { return "input" }
+        
+        let description = model.modelDescription
+        let inputNames = Array(description.inputDescriptionsByName.keys)
+        
+        print("🔍 Input names disponibles: \(inputNames)")
+        
+        // Para modelos de Tabular Data, el input suele ser "input" o "features"
+        let preferredNames = ["input", "features", "poses", "data"]
+        if let preferred = preferredNames.first(where: { inputNames.contains($0) }) {
+            return preferred
         }
         
-        // Extraer confianzas para todas las clases
-        var confidence: Float = 0.0
+        // Si no hay coincidencia, usar el primer input disponible
+        return inputNames.first ?? "input"
+    }
+    
+    /// Convierte HandPose a array de características para el modelo
+    private func convertHandPoseToFeatureArray(_ handPose: HandPose) -> [Double] {
+        var features: [Double] = []
+        
+        for point in handPose.points {
+            features.append(Double(point.x))
+            features.append(Double(point.y))
+        }
+        
+        // Asegurar tamaño consistente (21 puntos * 2 coordenadas = 42 características)
+        while features.count < 42 {
+            features.append(0.0)
+        }
+        
+        // Si tenemos más de 42 características, tomar solo las primeras 42
+        if features.count > 42 {
+            features = Array(features.prefix(42))
+        }
+        
+        return features
+    }
+    
+    private func processPredictionResult(_ prediction: MLFeatureProvider, for handPose: HandPose) -> SignPrediction? {
+        var predictedSign: String = "Desconocido"
+        var confidence: Float = handPose.confidence
         var alternativePredictions: [String] = []
         
-        if let confidenceFeature = prediction.featureValue(for: "labelProbability") {
-            if let confidenceDict = confidenceFeature.dictionaryValue as? [String: Double] {
-                confidence = Float(confidenceDict[sign] ?? 0.0)
-                
-                // Obtener alternativas (top 3)
-                alternativePredictions = confidenceDict
-                    .sorted(by: { $0.value > $1.value })
-                    .prefix(3)
-                    .map { $0.key }
-                    .filter { $0 != sign }
+        // CORRECCIÓN: No usar conditional binding para propiedades no-opcionales
+        // En su lugar, verificar directamente los valores
+        
+        // 1. Buscar la predicción principal (classLabel)
+        let classLabelFeature = prediction.featureValue(for: "classLabel")
+        if classLabelFeature?.type == .string {
+            let stringValue = classLabelFeature!.stringValue
+            if !stringValue.isEmpty {
+                predictedSign = stringValue
+                print("✅ Predicción classLabel: \(predictedSign)")
             }
         }
         
+        // 2. Buscar probabilidades para confianza
+        let probabilitiesFeature = prediction.featureValue(for: "labelProbability")
+        if probabilitiesFeature?.type == .dictionary {
+            let dictionaryValue = probabilitiesFeature!.dictionaryValue
+            
+            print("🔍 Probabilidades encontradas: \(dictionaryValue.count) items")
+            
+            // Convertir a array de (key, value) y ordenar
+            var sortedPredictions: [(String, Double)] = []
+            
+            for (key, value) in dictionaryValue {
+                let stringKey = "\(key)" // Convertir AnyHashable a String
+                let doubleValue = value.doubleValue
+                sortedPredictions.append((stringKey, doubleValue))
+            }
+            
+            // Ordenar por confianza (mayor a menor)
+            sortedPredictions.sort { $0.1 > $1.1 }
+            
+            if let topPrediction = sortedPredictions.first {
+                predictedSign = topPrediction.0
+                confidence = Float(topPrediction.1)
+                
+                // Crear alternativas (excluyendo la predicción principal)
+                alternativePredictions = Array(sortedPredictions.prefix(4))
+                    .map { $0.0 }
+                    .filter { $0 != predictedSign }
+                
+                print("✅ Predicción final: \(predictedSign) - Confianza: \(confidence)")
+            }
+        }
+        
+        // 3. Si no encontramos classLabel, buscar en otros outputs
+        if predictedSign == "Desconocido" {
+            let alternativeOutputs = ["label", "prediction", "output"]
+            for outputName in alternativeOutputs {
+                let feature = prediction.featureValue(for: outputName)
+                if feature?.type == .string {
+                    let stringValue = feature!.stringValue
+                    if !stringValue.isEmpty {
+                        predictedSign = stringValue
+                        print("✅ Predicción \(outputName): \(predictedSign)")
+                        break
+                    }
+                }
+            }
+        }
+        
+        // 4. Si no hay alternativas, usar señas por defecto
+        if alternativePredictions.isEmpty {
+            alternativePredictions = supportedSigns
+                .filter { $0 != predictedSign }
+                .prefix(3)
+                .map { $0 }
+        }
+        
         return SignPrediction(
-            sign: sign,
+            id: UUID(),
+            sign: predictedSign,
             confidence: confidence,
             alternativePredictions: alternativePredictions,
             timestamp: Date()
@@ -189,14 +329,13 @@ extension RealSignRecognitionService {
         Modelo: \(currentModelName ?? "Desconocido")
         Inputs: \(description.inputDescriptionsByName.keys.joined(separator: ", "))
         Outputs: \(description.outputDescriptionsByName.keys.joined(separator: ", "))
+        Señas soportadas: \(supportedSigns.joined(separator: ", "))
         """
     }
     
     /// Lista las señas que el modelo puede reconocer
     func getSupportedSigns() -> [String] {
-        // Esto depende de cómo esté configurado tu modelo
-        // Por ahora retornamos un array vacío, se llenará con el modelo real
-        return []
+        return supportedSigns
     }
 }
 
@@ -206,5 +345,55 @@ extension RealSignRecognitionService {
         case inputPreparationFailed
         case modelNotLoaded
         case invalidPredictionResult
+    }
+}
+
+// MARK: - Helper para debugging
+extension RealSignRecognitionService {
+    
+    /// Debug: muestra información detallada del modelo
+    func debugModelInfo() {
+        guard let model = mlModel else {
+            print("❌ No hay modelo cargado")
+            return
+        }
+        
+        let description = model.modelDescription
+        print("""
+        🔍 DEBUG MODEL INFO:
+        • Modelo: \(currentModelName ?? "Desconocido")
+        • Inputs: \(description.inputDescriptionsByName.keys)
+        • Outputs: \(description.outputDescriptionsByName.keys)
+        • Señas: \(supportedSigns)
+        """)
+        
+        // Mostrar detalles de inputs
+        for (name, inputDesc) in description.inputDescriptionsByName {
+            print("   Input '\(name)': \(inputDesc.type)")
+            if let constraint = inputDesc.multiArrayConstraint {
+                print("     Shape: \(constraint.shape)")
+            }
+        }
+        
+        // Mostrar detalles de outputs
+        for (name, outputDesc) in description.outputDescriptionsByName {
+            print("   Output '\(name)': \(outputDesc.type)")
+            if outputDesc.type == .dictionary {
+                print("     ✅ Es un diccionario (probabilidades)")
+            } else if outputDesc.type == .string {
+                print("     ✅ Es string (classLabel)")
+            }
+        }
+    }
+    
+    /// Simula una predicción para testing
+    func simulatePrediction() -> SignPrediction {
+        return SignPrediction(
+            id: UUID(),
+            sign: "Hola",
+            confidence: 0.85,
+            alternativePredictions: ["Adios", "Gracias", "Por Favor"],
+            timestamp: Date()
+        )
     }
 }

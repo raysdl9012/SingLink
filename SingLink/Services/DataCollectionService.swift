@@ -55,9 +55,7 @@ final class DataCollectionService: ObservableObject {
     func stopRecordingSession() {
         isRecording = false
         
-        // ✅ CORRECCIÓN: Guardar ANTES de mostrar el mensaje
         let samplesCollected = currentSessionSamples.count
-        
         if samplesCollected > 0 {
             saveSessionSamples()
             print("⏹️ Stopped data collection session. Collected \(samplesCollected) samples")
@@ -65,7 +63,6 @@ final class DataCollectionService: ObservableObject {
             print("⏹️ Stopped data collection session. No samples collected")
         }
         
-        // ✅ CORRECCIÓN: Limpiar después de guardar
         currentSessionSamples.removeAll()
         currentSessionId = ""
     }
@@ -89,7 +86,7 @@ final class DataCollectionService: ObservableObject {
         print("📝 Recorded sample for: '\(label)' - Session: \(currentSessionSamples.count) - Total: \(totalSamplesCollected)")
     }
     
-    func exportTrainingData() -> URL? {
+    func exportForCreateML() -> URL? {
         let allSamples = getAllSamples()
         
         guard !allSamples.isEmpty else {
@@ -97,28 +94,49 @@ final class DataCollectionService: ObservableObject {
             return nil
         }
         
-        let csvString = convertSamplesToCSV(samples: allSamples)
+        print("🔄 Procesando \(allSamples.count) muestras para Create ML...")
         
-        let tempDir = FileManager.default.temporaryDirectory
+        // Generar JSON en lugar de CSV
+        let jsonData = generateCreateMLJSON(samples: allSamples)
         
-        // ✅ CORREGIDO: Usar formato de fecha seguro para nombres de archivo
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
-        let dateString = dateFormatter.string(from: Date())
-        
-        let fileURL = tempDir.appendingPathComponent("signlink_training_\(dateString).csv")
-        
-        print("File path: \(fileURL.path)")
-        
-        do {
-            try csvString.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("📤 Exported \(allSamples.count) samples to: \(fileURL.lastPathComponent)")
-            return fileURL
-        } catch {
-            print("❌ Error exporting training data: \(error)")
-            print("❌ Error details: \(error.localizedDescription)")
+        // Guardar como .json
+        guard let fileURL = saveJSONToDocuments(jsonData: jsonData, samples: allSamples) else {
             return nil
         }
+        
+        print("✅ Exportación JSON completada exitosamente")
+        return fileURL
+    }
+    
+    // MARK: - Export Methods for Create ML
+    func exportForCreateMLToCSV() -> URL? {
+        let allSamples = getAllSamples()
+        
+        guard !allSamples.isEmpty else {
+            print("❌ No hay datos para exportar")
+            return nil
+        }
+        
+        print("🔄 Procesando \(allSamples.count) muestras para Create ML...")
+        
+        // Limpiar y validar datos
+        let validSamples = cleanSamples(allSamples)
+        
+        guard !validSamples.isEmpty else {
+            print("❌ No hay muestras válidas después de la limpieza")
+            return nil
+        }
+        
+        // Generar CSV
+        let csvString = generateCreateMLCSV(samples: validSamples)
+        
+        // Guardar en Documents (compartible)
+        guard let fileURL = saveCSVToDocuments(csvString: csvString, samples: validSamples) else {
+            return nil
+        }
+        
+        print("✅ Exportación completada exitosamente")
+        return fileURL
     }
     
     func getDatasetStats() -> DatasetStatistics {
@@ -144,7 +162,6 @@ final class DataCollectionService: ObservableObject {
         print("🗑️ Cleared all training data")
     }
     
-    // ✅ NUEVO: Método para debug detallado
     func printDebugInfo() {
         print("""
         🔍 DATA COLLECTION DEBUG:
@@ -197,33 +214,192 @@ final class DataCollectionService: ObservableObject {
         return allStoredSamples + currentSessionSamples
     }
     
-    private func convertSamplesToCSV(samples: [TrainingSample]) -> String {
-        var csvString = "label,timestamp,session_id,"
+    // MARK: - Create ML Data Processing
+    private func cleanSamples(_ samples: [TrainingSample]) -> [TrainingSample] {
+        var validSamples: [TrainingSample] = []
+        var skippedCount = 0
         
-        // CSV header - dynamic based on hand points
-        if let firstSample = samples.first {
-            for i in 0..<firstSample.handPose.points.count {
-                csvString += "point_\(i)_x,point_\(i)_y,point_\(i)_confidence,"
+        for sample in samples {
+            // Verificar que tenga suficientes puntos válidos
+            let validPoints = sample.handPose.points.filter { point in
+                point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1
             }
-            // Remove last comma
-            csvString = String(csvString.dropLast())
+            
+            if validPoints.count >= 10 { // Mínimo 10 puntos válidos
+                validSamples.append(sample)
+            } else {
+                skippedCount += 1
+            }
+        }
+        
+        if skippedCount > 0 {
+            print("⚠️ Se omitieron \(skippedCount) muestras por datos insuficientes")
+        }
+        
+        return validSamples
+    }
+    
+    
+
+    private func generateCreateMLJSON(samples: [TrainingSample]) -> Data {
+        var jsonArray: [[String: Any]] = []
+        
+        for sample in samples {
+            let poseDict = convertToCreateMLFormat(handPose: sample.handPose)
+            let sampleDict: [String: Any] = [
+                "label": sample.label,
+                "pose": poseDict
+            ]
+            jsonArray.append(sampleDict)
+        }
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: jsonArray, options: [.prettyPrinted])
+            return jsonData
+        } catch {
+            print("❌ Error creating JSON: \(error)")
+            return Data()
+        }
+    }
+
+    private func convertToCreateMLFormat(handPose: HandPose) -> [String: Any] {
+        var pointsArray: [[String: Double]] = []
+        
+        for point in handPose.points {
+            let normalizedPoint: [String: Double] = [
+                "x": max(0.0, min(1.0, point.x)),
+                "y": max(0.0, min(1.0, point.y))
+            ]
+            pointsArray.append(normalizedPoint)
+        }
+        
+        // Asegurar 21 puntos
+        while pointsArray.count < 21 {
+            pointsArray.append(["x": 0.0, "y": 0.0])
+        }
+        
+        return [
+            "points": pointsArray,
+            "frame": [
+                "width": 1.0,
+                "height": 1.0
+            ]
+        ]
+    }
+
+    private func saveJSONToDocuments(jsonData: Data, samples: [TrainingSample]) -> URL? {
+        guard let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("❌ No se pudo acceder al directorio Documents")
+            return nil
+        }
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let dateString = dateFormatter.string(from: Date())
+        
+        // ✅ EXTENSIÓN .json
+        let fileName = "SignLink_Training_\(dateString).json"
+        let fileURL = documentsDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try jsonData.write(to: fileURL)
+            
+            if fileManager.fileExists(atPath: fileURL.path) {
+                printStats(samples: samples, fileURL: fileURL)
+                return fileURL
+            } else {
+                print("❌ El archivo JSON no se creó correctamente")
+                return nil
+            }
+        } catch {
+            print("❌ Error guardando JSON: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    
+    private func generateCreateMLCSV(samples: [TrainingSample]) -> String {
+        // Create ML puede requerir nombres de columnas específicos
+        var csvString = "label,"
+        
+        // Agregar columnas para cada punto
+        for i in 0..<21 {
+            csvString += "point_\(i).x,point_\(i).y"
+            if i < 20 { csvString += "," }
         }
         csvString += "\n"
         
-        // CSV data
+        // Datos
         for sample in samples {
-            var row = "\"\(sample.label)\",\(sample.timestamp.timeIntervalSince1970),\(sample.sessionId),"
+            var row = escapeCSVField(sample.label)
             
-            for point in sample.handPose.points {
-                row += "\(point.x),\(point.y),\(point.confidence),"
+            for i in 0..<21 {
+                if i < sample.handPose.points.count {
+                    let point = sample.handPose.points[i]
+                    let x = max(0.0, min(1.0, point.x))
+                    let y = max(0.0, min(1.0, point.y))
+                    row += ",\(x),\(y)"
+                } else {
+                    row += ",0.0,0.0"
+                }
             }
-            
-            // Remove last comma and add newline
-            row = String(row.dropLast()) + "\n"
-            csvString += row
+            csvString += row + "\n"
+        }    
+        return csvString
+    }
+    
+    private func saveCSVToDocuments(csvString: String, samples: [TrainingSample]) -> URL? {
+        guard let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("❌ No se pudo acceder al directorio Documents")
+            return nil
         }
         
-        return csvString
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let dateString = dateFormatter.string(from: Date())
+        
+        let fileName = "SignLink_CreateML_\(dateString).csv"
+        let fileURL = documentsDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try csvString.write(to: fileURL, atomically: true, encoding: .utf8)
+            
+            // Verificar creación
+            if fileManager.fileExists(atPath: fileURL.path) {
+                printStats(samples: samples, fileURL: fileURL)
+                return fileURL
+            } else {
+                print("❌ El archivo no se creó correctamente")
+                return nil
+            }
+        } catch {
+            print("❌ Error guardando CSV: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    private func printStats(samples: [TrainingSample], fileURL: URL) {
+        let labels = Set(samples.map { $0.label })
+        let distribution = Dictionary(grouping: samples, by: { $0.label })
+            .mapValues { $0.count }
+        
+        print("""
+        ✅ ARCHIVO CREADO EXITOSAMENTE:
+        📁 Ubicación: \(fileURL.lastPathComponent)
+        📊 Estadísticas:
+          • Muestras totales: \(samples.count)
+          • Labels únicos: \(labels.count)
+          • Distribución:
+        \(distribution.map { "    - \($0.key): \($0.value) muestras" }.joined(separator: "\n"))
+        """)
+    }
+    
+    private func escapeCSVField(_ field: String) -> String {
+        if field.contains(",") || field.contains("\"") || field.contains("\n") {
+            let escaped = field.replacingOccurrences(of: "\"", with: "\"\"")
+            return "\"\(escaped)\""
+        }
+        return field
     }
     
     private func calculateLabelDistribution(samplesPerLabel: [String: Int]) -> [String: Double] {

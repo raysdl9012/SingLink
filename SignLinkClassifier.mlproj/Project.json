@@ -1,0 +1,29 @@
+{
+  "activityEntities" : [
+    "projectCreated",
+    [
+      {
+        "createdDate" : "2025-11-18T02:21:00Z",
+        "event" : "projectCreated",
+        "id" : "C8892797-B72F-4487-A079-989F3DFE0BFD",
+        "subtitle" : "SignLinkClassifier",
+        "title" : "Project Created"
+      }
+    ]
+  ],
+  "authorName" : "Reinner Steven Daza Leiva",
+  "createdDate" : "2025-11-18T02:21:00Z",
+  "description" : "",
+  "id" : "348CE1CC-4BC1-4653-9E18-4E7CD3E8D27E",
+  "license" : "",
+  "location" : "",
+  "modifiedDate" : "2025-11-18T02:21:00Z",
+  "projectName" : "SignLinkClassifier",
+  "settingsEntity" : {
+    "snapshotOnExtendTraining" : true,
+    "snapshotOnResumeTraining" : false
+  },
+  "taskType" : "generalClassifier",
+  "title" : "Tabular Classification",
+  "version" : "1.1"
+}

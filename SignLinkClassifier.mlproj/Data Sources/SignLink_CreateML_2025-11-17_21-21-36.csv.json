@@ -1,0 +1,41 @@
+{
+  "activityEntities" : [
+    "dataSourceTrainingStarted",
+    [
+      {
+        "createdDate" : "2025-11-18T02:34:39Z",
+        "event" : "dataSourceTrainingStarted",
+        "id" : "D6ABD471-3AEC-4134-8137-E8CB0EF7683B",
+        "subtitle" : "SignLinkClassifier 1",
+        "title" : "Used By"
+      }
+    ],
+    "dataSourceMetrics",
+    [
+      {
+        "createdDate" : "2025-11-18T02:34:39Z",
+        "event" : "dataSourceMetrics",
+        "id" : "757CD80F-48AC-43C5-A3A6-3C0545750C64",
+        "subtitle" : "5 Classes, 936 Items",
+        "title" : "Data Summary"
+      }
+    ]
+  ],
+  "createdDate" : "2025-11-18T02:21:59Z",
+  "dataPathRelativeToProjectURL" : "../../../../../../Users/icaros/Downloads/SignLink_CreateML_2025-11-17_21-21-36.csv/",
+  "dataResult" : {
+    "createdDate" : "2025-11-18T02:21:59Z",
+    "dataSourceID" : "FE9965B5-EC7E-4822-8B1B-1F23268BC778",
+    "dataURL" : "file:///Users/icaros/Downloads/SignLink_CreateML_2025-11-17_21-21-36.csv"
+  },
+  "dataURL" : "file:///Users/icaros/Downloads/SignLink_CreateML_2025-11-17_21-21-36.csv",
+  "experimentIDs" : [
+    "EA9EC788-D0DF-47EA-8C4F-6AF333211327"
+  ],
+  "id" : "FE9965B5-EC7E-4822-8B1B-1F23268BC778",
+  "modifiedDate" : "2025-11-18T02:34:39Z",
+  "pathType" : 0,
+  "preferredFilename" : "SignLink_CreateML_2025-11-17_21-21-36.csv",
+  "title" : "SignLink_CreateML_2025-11-17_21-21-36.csv",
+  "version" : "1.0"
+}

@@ -26,19 +26,13 @@ struct HandPose: Identifiable, Codable, Equatable {
     }
 }
 
-struct SimulatedPoint: Codable, Equatable {
-    let x: Double
+struct SimulatedPoint: Codable {
+    let x: Double // Cambiar de CGFloat a Double para mejor compatibilidad JSON
     let y: Double
     let confidence: Float
     let jointName: String
-    
-    init(x: Double, y: Double, confidence: Float, jointName: String) {
-        self.x = x
-        self.y = y
-        self.confidence = confidence
-        self.jointName = jointName
-    }
 }
+
 struct SignPrediction: Identifiable, Equatable, Codable {
     let id: UUID
     let sign: String
@@ -84,5 +78,28 @@ struct ConversationMessage: Identifiable, Codable {
         self.isFromUser = isFromUser
         self.timestamp = timestamp
         self.confidence = confidence
+    }
+}
+
+
+extension SignPrediction {
+    var formattedConfidence: String {
+        return String(format: "%.1f%%", confidence * 100)
+    }
+    
+    var topPrediction: String {
+        return sign
+    }
+    
+    var hasHighConfidence: Bool {
+        return confidence > 0.7
+    }
+    
+    var hasMediumConfidence: Bool {
+        return confidence > 0.4 && confidence <= 0.7
+    }
+    
+    var hasLowConfidence: Bool {
+        return confidence <= 0.4
     }
 }

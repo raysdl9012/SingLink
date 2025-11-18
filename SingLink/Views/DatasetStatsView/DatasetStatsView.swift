@@ -423,7 +423,7 @@ struct DatasetStatsView: View {
                     Text("Started: \(Date(), formatter: dateFormatter)")
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    
+                     
                     Text("Samples this session: \(dataService.currentSessionSamples.count)")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -441,7 +441,7 @@ struct DatasetStatsView: View {
     }
     
     private func exportData() {
-        if let url = dataService.exportTrainingData() {
+        if let url = dataService.exportForCreateMLToCSV() {
             exportedURL = url
             showingExportSheet = true
         }
