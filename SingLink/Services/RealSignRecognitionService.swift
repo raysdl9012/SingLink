@@ -46,8 +46,7 @@ extension RealSignRecognitionService {
             isModelLoaded = true
             modelLoadError = nil
             
-            // Cargar las señas soportadas
-            loadSupportedSigns()
+        
             
             print("✅ Modelo cargado: \(currentModelName ?? "Desconocido")")
             print("🏷️ Señas soportadas: \(supportedSigns)")
@@ -115,21 +114,6 @@ extension RealSignRecognitionService {
         }
     }
     
-    /// Carga las señas soportadas desde la descripción del modelo
-    private func loadSupportedSigns() {
-        guard let model = mlModel else { return }
-        
-        let description = model.modelDescription
-        
-        // Por ahora, usar señas por defecto basadas en dataset común
-        supportedSigns = getDefaultSupportedSigns()
-        
-        print("⚠️ Usando señas por defecto: \(supportedSigns)")
-    }
-    
-    private func getDefaultSupportedSigns() -> [String] {
-        return ["Hola", "Adios", "Gracias", "Por Favor", "Si", "No", "Ayuda", "Comida", "Agua"]
-    }
 }
 
 // MARK: - Prediction
@@ -155,7 +139,7 @@ extension RealSignRecognitionService {
             
             // Realizar predicción
             let prediction = try mlModel.prediction(from: input)
-            
+            print("predicted class label: \(prediction.featureNames)")
             // Procesar resultados
             return processPredictionResult(prediction, for: bestHandPose)
             
@@ -167,46 +151,47 @@ extension RealSignRecognitionService {
     
     /// Prepara el input del modelo desde una hand pose
     private func prepareModelInput(from handPose: HandPose) throws -> MLFeatureProvider {
-        // Convertir hand pose a array de características
-        let featureArray = convertHandPoseToFeatureArray(handPose)
+        // Crear un diccionario con TODAS las características que el modelo espera
+        var featureDictionary: [String: MLFeatureValue] = [:]
         
-        // Crear MLMultiArray con las características
-        let multiArray = try MLMultiArray(shape: [NSNumber(value: featureArray.count)], dataType: .double)
+        // El modelo espera 21 puntos * 2 coordenadas = 42 características
+        let totalPoints = 21
         
-        for (index, value) in featureArray.enumerated() {
-            multiArray[index] = NSNumber(value: value)
+        // Para cada punto 0-20, agregar x e y
+        for i in 0..<totalPoints {
+            let xKey = "point_\(i).x"
+            let yKey = "point_\(i).y"
+            
+            if i < handPose.points.count {
+                let point = handPose.points[i]
+                // Asegurar que las coordenadas estén en rango [0,1]
+                let x = max(0.0, min(1.0, point.x))
+                let y = max(0.0, min(1.0, point.y))
+                
+                featureDictionary[xKey] = MLFeatureValue(double: x)
+                featureDictionary[yKey] = MLFeatureValue(double: y)
+            } else {
+                // Si faltan puntos, usar valores por defecto (0,0)
+                featureDictionary[xKey] = MLFeatureValue(double: 0.0)
+                featureDictionary[yKey] = MLFeatureValue(double: 0.0)
+            }
         }
         
-        // Crear input - usar el nombre correcto basado en debug
-        let featureValue = MLFeatureValue(multiArray: multiArray)
-        let inputName = determineInputName()
+        print("🔍 Enviando \(featureDictionary.count) características al modelo")
         
-        print("🔍 Usando input name: \(inputName)")
-        
-        let featureProvider = try MLDictionaryFeatureProvider(dictionary: [
-            inputName: featureValue
-        ])
-        
+        // Crear el feature provider con TODAS las características
+        let featureProvider = try MLDictionaryFeatureProvider(dictionary: featureDictionary)
         return featureProvider
     }
     
     /// Determina el nombre correcto del input basado en la descripción del modelo
     private func determineInputName() -> String {
-        guard let model = mlModel else { return "input" }
+        // Para modelos Tabular Data, NO usamos un solo nombre de input
+        // En su lugar, el modelo espera múltiples características individuales
+        // Por eso el método prepareModelInput ahora crea un diccionario completo
         
-        let description = model.modelDescription
-        let inputNames = Array(description.inputDescriptionsByName.keys)
-        
-        print("🔍 Input names disponibles: \(inputNames)")
-        
-        // Para modelos de Tabular Data, el input suele ser "input" o "features"
-        let preferredNames = ["input", "features", "poses", "data"]
-        if let preferred = preferredNames.first(where: { inputNames.contains($0) }) {
-            return preferred
-        }
-        
-        // Si no hay coincidencia, usar el primer input disponible
-        return inputNames.first ?? "input"
+        print("🔍 Modelo Tabular Data - Usando múltiples características")
+        return "" // No se usa para este tipo de modelo
     }
     
     /// Convierte HandPose a array de características para el modelo

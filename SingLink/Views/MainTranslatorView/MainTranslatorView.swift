@@ -27,6 +27,9 @@ struct MainTranslatorView: View {
     
     // MARK: - RecognitionService
     @StateObject private var recognitionService = RealSignRecognitionService()
+    @State private var currentPrediction: SignPrediction?
+    @State private var isRecognizing = false
+    @State private var recognitionTimer: Timer?
     
     // MARK: - Computed Properties
     private var isCameraActive: Bool {
@@ -61,7 +64,7 @@ struct MainTranslatorView: View {
                     )
                     
                     Spacer()
-
+                    
                     ControlsView(
                         cameraManager: cameraManager,
                         isCameraActive: isCameraActive,
@@ -85,6 +88,7 @@ struct MainTranslatorView: View {
     }
 }
 
+
 // MARK: - Prediction View
 private extension MainTranslatorView {
     var predictionView: some View {
@@ -94,6 +98,9 @@ private extension MainTranslatorView {
                     label: currentDataLabel,
                     sampleCount: dataCollectionService.currentSessionSamples.count
                 )
+            }else if let prediction = currentPrediction {
+                // NUEVO: Mostrar predicción REAL del modelo
+                RecognitionResultView(prediction: prediction)
             } else if isCameraActive {
                 WaitingForSignView()
             } else {
@@ -146,15 +153,88 @@ private extension MainTranslatorView {
 private extension MainTranslatorView {
     func onViewAppear() {
         if cameraManager.isAuthorized {
-            cameraManager.startSession()
+            //cameraManager.startSession()
+            //startRecognition()
         }
         setupInstanceObservers()
         applyPerformanceOptimizations()
+        checkModelStatus()
     }
     
     func onViewDisappear() {
         cleanupInstanceObservers()
         stopDataCollectionTimer()
+    }
+    
+    func checkModelStatus() {
+        if !recognitionService.isModelLoaded {
+            print("⚠️ Modelo no cargado. Razón: \(recognitionService.modelLoadError ?? "Desconocida")")
+        } else {
+            print("✅ Modelo cargado: \(recognitionService.currentModelName ?? "Desconocido")")
+            recognitionService.debugModelInfo()
+        }
+    }
+}
+
+
+private extension MainTranslatorView {
+    func toggleRecognition() {
+        if isRecognizing {
+            stopRecognition()
+        } else {
+            startRecognition()
+        }
+    }
+    
+    func startRecognition() {
+        guard recognitionService.isModelLoaded else {
+            print("❌ No se puede iniciar reconocimiento - modelo no cargado")
+            return
+        }
+        isRecognizing = true
+        currentPrediction = nil
+        // Iniciar timer para reconocimiento continuo
+        recognitionTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            Task {
+                await self.processRecognition()
+            }
+        }
+        hapticManager.cameraStarted()
+        print("🎯 Reconocimiento iniciado")
+    }
+    
+    func stopRecognition() {
+        isRecognizing = false
+        stopRecognitionTimer()
+        currentPrediction = nil
+        print("⏹️ Reconocimiento DETENIDO")
+    }
+    
+    func stopRecognitionTimer() {
+        recognitionTimer?.invalidate()
+        recognitionTimer = nil
+    }
+    
+    func processRecognition() async {
+        guard isRecognizing,
+              cameraManager.isSessionRunning,
+              recognitionService.isModelLoaded else { return }
+        
+        let handPoses = cameraManager.getRealHandPoses()
+        
+        // Solo procesar si hay manos detectadas
+        guard !handPoses.isEmpty else {
+            return
+        }
+        
+        // Usar el servicio de reconocimiento REAL
+        if let prediction = recognitionService.predictSign(from: handPoses) {
+            await MainActor.run {
+                // Actualizar la interfaz con la predicción real
+                self.currentPrediction = prediction
+                print("🎯 Predicción REAL: \(prediction.sign) - \(prediction.formattedConfidence)")
+            }
+        }
     }
 }
 
@@ -164,13 +244,18 @@ private extension MainTranslatorView {
         if isCameraActive {
             cameraManager.stopSession()
             hapticManager.cameraStopped()
+            stopRecognition()
         } else {
             if cameraManager.isAuthorized {
                 cameraManager.startSession()
                 hapticManager.cameraStarted()
+                startRecognition()
             } else {
                 cameraManager.cameraError = .permissionDenied
                 hapticManager.errorOccurred()
+                isRecognizing = false
+                currentPrediction = nil
+                stopRecognition()
             }
         }
     }
@@ -183,6 +268,7 @@ private extension MainTranslatorView {
     func clearPrediction() {
         hapticManager.buttonPressed()
         cameraManager.stopSession()
+        currentPrediction = nil
     }
     
     func openAppSettings() {
@@ -251,7 +337,6 @@ private extension MainTranslatorView {
 private extension MainTranslatorView {
     func startDataCollectionTimer() {
         stopDataCollectionTimer()
-        
         collectionTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
             Task {
                 await self.processDataCollection()
@@ -331,7 +416,7 @@ private extension MainTranslatorView {
             queue: .main
         ) { _ in
             if self.cameraManager.isAuthorized {
-                self.cameraManager.startSession()
+                //self.cameraManager.startSession()
             }
         }
     }
@@ -383,6 +468,48 @@ private extension View {
 #else
         self
 #endif
+    }
+}
+
+
+struct RecognitionResultView: View {
+    let prediction: SignPrediction
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            // Icono basado en confianza
+            Image(systemName: prediction.confidence > 0.7 ? "checkmark.circle.fill" : "exclamationmark.circle")
+                .font(.system(size: 50))
+                .foregroundColor(prediction.confidence > 0.7 ? .green : .orange)
+            
+            VStack(spacing: 8) {
+                // Seña reconocida
+                Text(prediction.sign)
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                // Confianza
+                Text("\(prediction.formattedConfidence) de confianza")
+                    .font(.title3)
+                    .foregroundColor(prediction.confidence > 0.7 ? .green : .orange)
+                
+                // Alternativas si las hay
+                if !prediction.alternativePredictions.isEmpty {
+                    VStack(alignment: .leading) {
+                        Text("También podría ser:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text(prediction.alternativePredictions.joined(separator: ", "))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(30)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 }
 
