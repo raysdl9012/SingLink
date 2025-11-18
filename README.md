@@ -187,5 +187,3 @@ MIT or organization-specific license (update based on project needs).
 * Email: [reinner.leiva@gmail.com](mailto:reinner.leiva@gmail.com) 
 
 ---
-
-> *This README serves as a professional baseline for development, presentations, and stakeholder communication. Ask if you’d like additional documentation such as `CONTRIBUTING.md`, `ARCHITECTURE.md`, test suites, or a Security & Privacy manual.*
