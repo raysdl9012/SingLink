@@ -39,7 +39,7 @@ final class DataCollectionService: ObservableObject {
     private let samplesKey = "signlink_collected_samples"
     private var allStoredSamples: [TrainingSample] = []
     
-    private init() {
+    init() {
         loadExistingSamples()
         totalSamplesCollected = allStoredSamples.count + currentSessionSamples.count
     }
@@ -100,14 +100,23 @@ final class DataCollectionService: ObservableObject {
         let csvString = convertSamplesToCSV(samples: allSamples)
         
         let tempDir = FileManager.default.temporaryDirectory
-        let fileURL = tempDir.appendingPathComponent("signlink_training_\(Date().formatted(date: .numeric, time: .shortened)).csv")
+        
+        // ✅ CORREGIDO: Usar formato de fecha seguro para nombres de archivo
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let dateString = dateFormatter.string(from: Date())
+        
+        let fileURL = tempDir.appendingPathComponent("signlink_training_\(dateString).csv")
+        
         print("File path: \(fileURL.path)")
+        
         do {
             try csvString.write(to: fileURL, atomically: true, encoding: .utf8)
             print("📤 Exported \(allSamples.count) samples to: \(fileURL.lastPathComponent)")
             return fileURL
         } catch {
             print("❌ Error exporting training data: \(error)")
+            print("❌ Error details: \(error.localizedDescription)")
             return nil
         }
     }
@@ -184,7 +193,7 @@ final class DataCollectionService: ObservableObject {
         }
     }
     
-    private func getAllSamples() -> [TrainingSample] {
+    public func getAllSamples() -> [TrainingSample] {
         return allStoredSamples + currentSessionSamples
     }
     

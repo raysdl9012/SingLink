@@ -14,7 +14,7 @@ struct CameraPreviewView: UIViewRepresentable {
     
     func makeUIView(context: Context) -> CameraPreviewUIView {
         let previewView = CameraPreviewUIView()
-        previewView.setupPreviewLayer(with: cameraManager.getCamerasesids())
+        previewView.setupPreviewLayer(with: cameraManager.captureSession)
         return previewView
     }
     

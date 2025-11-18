@@ -31,14 +31,13 @@ class MockSignRecognitionService: SignRecognitionServiceProtocol, ObservableObje
         isSimulating = true
         simulationTask = Task {
             while !Task.isCancelled && isSimulating {
-                // Simular detección cada 2-4 segundos
-                let delay = UInt64.random(in: 2_000_000_000...4_000_000_000)
+                // ✅ CAMBIADO: Simular detección cada 0.5-1.5 segundos (más frecuente)
+                let delay = UInt64.random(in: 500_000_000...1_500_000_000)
                 try? await Task.sleep(nanoseconds: delay)
                 
                 if !Task.isCancelled {
                     await MainActor.run {
-                        // Notificar que hay una nueva predicción disponible
-                        ObjectWillChangePublisher().send()
+                        objectWillChange.send() // ✅ CAMBIADO: Usar la propiedad real
                     }
                 }
             }

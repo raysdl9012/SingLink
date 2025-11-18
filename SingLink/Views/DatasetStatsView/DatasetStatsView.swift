@@ -22,11 +22,17 @@ struct DatasetStatsView: View {
                     // Header Card
                     headerCard
                     
+                    // Progress Card
+                    progressCard
+                    
                     // Statistics Card
                     statisticsCard
                     
                     // Labels Distribution
                     distributionCard
+                    
+                    // Data Preview
+                    dataPreviewCard
                     
                     // Actions
                     actionsCard
@@ -50,13 +56,20 @@ struct DatasetStatsView: View {
                     ShareSheet(activityItems: [url])
                 }
             }
-            .alert("Clear All Data", isPresented: $showingClearAlert) {
+            .alert("Clear All Training Data", isPresented: $showingClearAlert) {
                 Button("Cancel", role: .cancel) { }
-                Button("Clear", role: .destructive) {
+                Button("Clear All Data", role: .destructive) {
                     dataService.clearAllData()
                 }
             } message: {
-                Text("This will permanently delete all collected training data. This action cannot be undone.")
+                VStack {
+                    Text("This will permanently delete:")
+                    Text("• \(dataService.totalSamplesCollected) total samples")
+                    Text("• \(dataService.getDatasetStats().uniqueLabels) unique signs")
+                    Text("This action cannot be undone.")
+                        .fontWeight(.medium)
+                        .foregroundColor(.red)
+                }
             }
         }
     }
@@ -119,6 +132,61 @@ struct DatasetStatsView: View {
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
     }
     
+    private var progressCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .foregroundColor(.purple)
+                
+                Text("Collection Progress")
+                    .font(.headline)
+                
+                Spacer()
+            }
+            
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Recommended for Training:")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                ProgressView(value: Double(dataService.totalSamplesCollected), total: 500)
+                    .progressViewStyle(LinearProgressViewStyle(tint: getProgressColor()))
+                
+                HStack {
+                    Text("\(dataService.totalSamplesCollected) / 500 samples")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Text("\(Int(Double(dataService.totalSamplesCollected) / 500 * 100))%")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                
+                if dataService.totalSamplesCollected < 100 {
+                    Text("🎯 Goal: Collect at least 100 samples per sign")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                } else if dataService.totalSamplesCollected < 300 {
+                    Text("✅ Good progress! Aim for 300+ samples for better accuracy")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                } else {
+                    Text("🎉 Excellent! You have enough data for training")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+    
     private var statisticsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -135,24 +203,43 @@ struct DatasetStatsView: View {
             
             let stats = dataService.getDatasetStats()
             
-            VStack(alignment: .leading, spacing: 8) {
-                StatRow(title: "Total Samples", value: "\(stats.totalSamples)")
-                StatRow(title: "Unique Labels", value: "\(stats.uniqueLabels)")
-                StatRow(title: "Dataset Balance", value: stats.isBalanced ? "✅ Balanced" : "⚠️ Imbalanced")
-                
-                if stats.totalSamples > 0 {
-                    Text("Label Distribution:")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .padding(.top, 4)
+            if stats.totalSamples == 0 {
+                VStack(spacing: 12) {
+                    Image(systemName: "chart.bar.doc.horizontal")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
                     
-                    ForEach(Array(stats.labelDistribution.keys.sorted()), id: \.self) { label in
-                        if let percentage = stats.labelDistribution[label] {
-                            DistributionRow(
-                                label: label,
-                                count: stats.samplesPerLabel[label] ?? 0,
-                                percentage: percentage
-                            )
+                    Text("No Data Collected Yet")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Start recording signs using the main screen")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    StatRow(title: "Total Samples", value: "\(stats.totalSamples)")
+                    StatRow(title: "Unique Labels", value: "\(stats.uniqueLabels)")
+                    StatRow(title: "Dataset Balance", value: stats.isBalanced ? "✅ Balanced" : "⚠️ Imbalanced")
+                    
+                    if stats.totalSamples > 0 {
+                        Text("Label Distribution:")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .padding(.top, 4)
+                        
+                        ForEach(Array(stats.labelDistribution.keys.sorted()), id: \.self) { label in
+                            if let percentage = stats.labelDistribution[label] {
+                                DistributionRow(
+                                    label: label,
+                                    count: stats.samplesPerLabel[label] ?? 0,
+                                    percentage: percentage
+                                )
+                            }
                         }
                     }
                 }
@@ -199,7 +286,62 @@ struct DatasetStatsView: View {
                             .foregroundColor(.secondary)
                     }
                     .padding(.vertical, 2)
+                    
+                    if stats.samplesPerLabel[label] ?? 0 < 50 {
+                        Text("⚠️ Collect more samples for better accuracy")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
                 }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+    
+    private var dataPreviewCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "eye.fill")
+                    .foregroundColor(.blue)
+                
+                Text("Data Preview")
+                    .font(.headline)
+                
+                Spacer()
+            }
+            
+            Divider()
+            
+            if let firstSample = dataService.getAllSamples().first {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Sample Structure:")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    Text("Label: \"\(firstSample.label)\"")
+                        .font(.caption)
+                    
+                    Text("Points: \(firstSample.handPose.points.count) joints")
+                        .font(.caption)
+                    
+                    Text("Confidence: \(String(format: "%.2f", firstSample.confidence))")
+                        .font(.caption)
+                    
+                    Text("Timestamp: \(firstSample.timestamp, formatter: dateFormatter)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Session: \(firstSample.sessionId.prefix(8))...")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                Text("No samples to preview")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
         .padding()
@@ -229,6 +371,9 @@ struct DatasetStatsView: View {
                         Image(systemName: "square.and.arrow.up")
                         Text("Export Training Data (CSV)")
                         Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                     .foregroundColor(.blue)
                 }
@@ -241,6 +386,9 @@ struct DatasetStatsView: View {
                         Image(systemName: "trash")
                         Text("Clear All Data")
                         Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                     .foregroundColor(.red)
                 }
@@ -275,6 +423,10 @@ struct DatasetStatsView: View {
                     Text("Started: \(Date(), formatter: dateFormatter)")
                         .font(.caption2)
                         .foregroundColor(.secondary)
+                    
+                    Text("Samples this session: \(dataService.currentSessionSamples.count)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 } else {
                     Text("No active recording session")
                         .font(.caption)
@@ -292,6 +444,15 @@ struct DatasetStatsView: View {
         if let url = dataService.exportTrainingData() {
             exportedURL = url
             showingExportSheet = true
+        }
+    }
+    
+    private func getProgressColor() -> Color {
+        let progress = Double(dataService.totalSamplesCollected) / 500.0
+        switch progress {
+        case 0..<0.3: return .red
+        case 0.3..<0.7: return .orange
+        default: return .green
         }
     }
 }

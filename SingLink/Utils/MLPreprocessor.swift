@@ -267,3 +267,45 @@ final class MLPreprocessor {
         return true
     }
 }
+
+// AGREGAR al final de MLPreprocessor.swift
+extension MLPreprocessor {
+    
+    // MARK: - Inference Preparation
+    
+    /// Prepara una hand pose para inferencia, aplicando la misma normalización que en entrenamiento
+    static func prepareForInference(_ handPose: HandPose) -> HandPose {
+        // Aplicar normalización consistente con el entrenamiento
+        let normalizedPose = normalizeHandPose(handPose)
+        
+        // Aquí puedes agregar más preprocesamiento específico para inferencia
+        // como filtrado de outliers, suavizado, etc.
+        
+        return normalizedPose
+    }
+    
+    /// Valida si una hand pose es adecuada para inferencia
+    static func isValidForInference(_ handPose: HandPose) -> Bool {
+        let points = handPose.points
+        
+        // Verificar que tenemos suficientes puntos
+        guard points.count >= 15 else {
+            return false
+        }
+        
+        // Verificar confianza promedio
+        let avgConfidence = points.map { $0.confidence }.reduce(0, +) / Float(points.count)
+        guard avgConfidence > 0.4 else {
+            return false
+        }
+        
+        // Verificar que los puntos están en rango válido
+        for point in points {
+            guard point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1 else {
+                return false
+            }
+        }
+        
+        return true
+    }
+}

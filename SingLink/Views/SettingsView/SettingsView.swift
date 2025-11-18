@@ -12,7 +12,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var recognitionService: MockSignRecognitionService
+    
     @StateObject private var cameraManager = CameraManager()
     @StateObject private var settingsVM = SettingsViewModel()
     @StateObject private var hapticManager = HapticManager.shared
@@ -65,23 +65,7 @@ struct SettingsView: View {
             Text("Idioma")
         }
     }
-    
-    private var developmentSection: some View {
-        Section {
-            Toggle("Modo Simulación", isOn: $settingsVM.settings.simulationMode)
-                .onChange(of: settingsVM.settings.simulationMode) { oldValue, newValue in
-                    hapticManager.toggleChanged()
-                    if newValue {
-                        recognitionService.startSimulation()
-                    } else {
-                        recognitionService.stopSimulation()
-                    }
-                }
-        } header: {
-            Text("Desarrollo")
-        }
-    }
-    
+        
     private var cameraSection: some View {
         Section {
             HStack {
@@ -159,9 +143,6 @@ struct SettingsView: View {
                     
                     // Sección Idioma
                     saveLanguaje
-                    
-                    // Sección Desarrollo
-                    developmentSection
                     
                     // Sección Cámara - Agregar feedback a botones
                     cameraSection
@@ -264,7 +245,7 @@ struct StatusIndicatorSettings: View {
 }
 
 #Preview {
-    SettingsView(recognitionService: MockSignRecognitionService())
+    SettingsView()
 }
 
 

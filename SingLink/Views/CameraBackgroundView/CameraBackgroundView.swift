@@ -15,6 +15,10 @@ struct CameraBackgroundView: View {
     
     let isActive: Bool
     
+    private var isCameraActive: Bool {
+        cameraManager.isSessionRunning && cameraManager.isAuthorized
+    }
+    
     var body: some View {
         ZStack {
             if isActive && cameraManager.isAuthorized {
@@ -39,22 +43,23 @@ struct CameraBackgroundView: View {
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
-            
-            VStack(spacing: 20) {
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.white.opacity(0.8))
-                
-                Text("Cámara Inactiva")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                
-                if !cameraManager.isAuthorized {
+            if !cameraManager.isAuthorized {
+                VStack(spacing: 20) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.white.opacity(0.8))
+                    
+                    Text("Cámara Inactiva")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                    
+                    
                     Text("Permiso de cámara requerido")
                         .font(.body)
                         .foregroundColor(.white.opacity(0.8))
                         .multilineTextAlignment(.center)
+                    
                 }
             }
         }

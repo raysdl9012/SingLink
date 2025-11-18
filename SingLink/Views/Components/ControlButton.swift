@@ -1,3 +1,4 @@
+
 //
 //  HeaderButton.swift
 //  SingLink
@@ -7,8 +8,9 @@
 
 import SwiftUI
 
-struct HeaderButton: View {
+struct ControlButton: View {
     let icon: String
+    let color: Color
     let action: () -> Void
     @StateObject private var hapticManager = HapticManager.shared
     
@@ -18,15 +20,18 @@ struct HeaderButton: View {
             action()
         }) {
             Image(systemName: icon)
-                .font(.title2)
+                .font(.title)
                 .foregroundColor(.white)
-                .frame(width: 44, height: 44)
-                .background(Color.white.opacity(0.2))
+                .frame(width: 60, height: 60)
+                .background(color)
                 .clipShape(Circle())
+                .shadow(color: color.opacity(0.3), radius: 8, x: 0, y: 4)
         }
     }
 }
 
 #Preview {
-    HeaderButton(icon: "camera") {}
+    ControlButton(icon: "camera", color: .green) {
+        
+    }
 }

@@ -9,12 +9,14 @@ import SwiftUI
 
 @main
 struct SignLinkApp: App {
+    
+    @Environment(\.scenePhase) private var scenePhase
+    
     @StateObject private var performanceMonitor = PerformanceMonitor.shared
     @StateObject private var batteryOptimizer = BatteryOptimizer.shared
     @StateObject private var memoryManager = MemoryManager.shared
-    @Environment(\.scenePhase) private var scenePhase
     
-    // NUEVO: Crear una instancia global para notificaciones
+    
     @State private var globalCameraManager: CameraManager?
     
     init() {
@@ -22,10 +24,6 @@ struct SignLinkApp: App {
         UIDevice.current.isBatteryMonitoringEnabled = true
         
         print("🚀 SignLink App Initialized")
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            MLTest.testDataCollection()
-        }
         
         // Configurar observadores globales
         setupGlobalObservers()
@@ -35,7 +33,6 @@ struct SignLinkApp: App {
         WindowGroup {
             MainTranslatorView()
                 .task {
-                    // Start performance monitoring in debug mode
 #if DEBUG
                     performanceMonitor.startMonitoring()
 #endif
@@ -46,7 +43,6 @@ struct SignLinkApp: App {
                 .onChange(of: scenePhase) { oldPhase, newPhase in
                     handleScenePhaseChange(newPhase)
                 }
-            // NUEVO: Pasar memoryManager a la vista principal
                 .environmentObject(memoryManager)
         }
     }
